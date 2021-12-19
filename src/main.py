@@ -88,7 +88,7 @@ class Scrape:
                                     latitude = body['searchResult']['searchMerchants'][i]['latlng']['latitude']
                                     longitude = body['searchResult']['searchMerchants'][i]['latlng']['longitude']
                                     name = body['searchResult']['searchMerchants'][i]['chainID']
-                                    print("Name: {} Lat: {} Long: {}".format(name, latitude, longitude))
+                                    # print("Name: {} Lat: {} Long: {}".format(name, latitude, longitude))
                                     self.data.append({"name": name, "latitude": latitude, "longitude": longitude})
                         except:
                             pass
