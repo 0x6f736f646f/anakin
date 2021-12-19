@@ -1,26 +1,28 @@
-# from selenium.webdriver import Firefox
-from seleniumwire.webdriver import Firefox # https://pypi.org/project/selenium-wire/
-from seleniumwire.utils import decode
+from selenium.webdriver import Chrome
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 import time
 import json
 import csv
 
 class Scrape:
-    def __init__(self):
+    def __init__(self, chromedriverpath=r'C:\Users\Public\D\Desktop\chromedriver_win32\chromedriver.exe'):
         """
         """
         self.LOAD_MORE = '/html/body/div[1]/div[2]/div[3]/div[4]/div/div/div[2]/div/button'
         self.SEE_PROMO = '/html/body/div[1]/div[2]/div[3]/div[5]/div[1]/div/button'
-        self.executable_path=r'C:\Users\0x6f736f646f\Downloads\geckodriver-v0.30.0-win64\geckodriver.exe'
+        self.executable_path=chromedriverpath
         self.url = 'https://food.grab.com/ph/en/'
         self.contained_url = "https://portal.grab.com/foodweb/v2/"
         self.loadmore = True
         self.data = []
         self.columntitles = ['name', 'latitude', 'longitude']
-        self.filename = "anakindata.csv"
-        print("INFO: Starting Firefox")
-        self.driver = Firefox(executable_path = self.executable_path)
-        time.sleep(60)
+        self.filename = "anakininterview.csv"
+        self.capabilities = DesiredCapabilities.CHROME
+        self.capabilities["goog:loggingPrefs"] = {"performance": "ALL"}
+        self.logs = None
+        print("INFO: Starting Chrome")
+        self.driver = Chrome(executable_path = self.executable_path, desired_capabilities = self.capabilities)
+        time.sleep(20)
 
 
     def change_location(self):
@@ -44,10 +46,10 @@ class Scrape:
         """
         print("INFO: Clicking the see promotions button")        
         self.driver.get(self.url)
-        time.sleep(60)
+        time.sleep(20)
         promo = self.driver.find_element_by_xpath(self.SEE_PROMO)
         promo.click()
-        time.sleep(60)
+        time.sleep(20)
 
     def load_more(self):
         """
@@ -63,6 +65,7 @@ class Scrape:
             except:
                 print("INFO: No more load more buttons")
                 self.loadmore = False
+        self.logs = self.driver.get_log("performance")
 
     
     def get_location(self):
@@ -71,19 +74,26 @@ class Scrape:
         it looks out for this "https://portal.grab.com/foodweb/v2/category?latlng=14.5995,120.9842&categoryShortcutID=305&searchID=&offset=94&pageSize=32" request
         """
         print("INFO: Getting geolocation data")
-        for request in self.driver.requests:
-            if request.response:
-                if request.url.__contains__(self.contained_url):
-                    try:
-                        body = decode(request.response.body, request.response.headers.get('Content-Encoding', 'gzip'))
-                        body = json.loads(body)
-                        for i in range(0, len(body['searchResult']['searchMerchants']),1):
-                            latitude = body['searchResult']['searchMerchants'][i]['latlng']['latitude']
-                            longitude = body['searchResult']['searchMerchants'][i]['latlng']['longitude']
-                            name = body['searchResult']['searchMerchants'][i]['chainID']
-                            self.data.append({"name": name, "latitude": latitude, "longitude": longitude})
-                    except KeyError as e:
-                        print(e)
+        for log in self.logs:
+            network_log = json.loads(log["message"])["message"]
+
+            if ("Network.responseReceived" in network_log["method"] and "params" in network_log.keys()):
+                try:
+                    url = network_log["params"]["response"]["url"]
+                    body = self.driver.execute_cdp_cmd('Network.getResponseBody', {'requestId': network_log["params"]["requestId"]})
+                    if self.contained_url in url:
+                        try:
+                            body = json.loads(body['body'])
+                            for i in range(0, len(body['searchResult']['searchMerchants']),1):
+                                    latitude = body['searchResult']['searchMerchants'][i]['latlng']['latitude']
+                                    longitude = body['searchResult']['searchMerchants'][i]['latlng']['longitude']
+                                    name = body['searchResult']['searchMerchants'][i]['chainID']
+                                    print("Name: {} Lat: {} Long: {}".format(name, latitude, longitude))
+                                    self.data.append({"name": name, "latitude": latitude, "longitude": longitude})
+                        except:
+                            pass
+                except:
+                        pass
     
     def write_csv(self):
         """
@@ -107,7 +117,9 @@ class Scrape:
         self.load_more()
         self.get_location()
         self.write_csv()
+        print("INFO: Quitting Selenium WebDriver")
+        self.driver.quit()
 
 if __name__ == "__main__":
-    scrape = Scrape()
+    scrape = Scrape(chromedriverpath=r'C:\Users\Public\D\Desktop\chromedriver_win32\chromedriver.exe')
     scrape.run() 
